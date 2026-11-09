@@ -3,8 +3,9 @@
 Stitch per-rank [Nsight Systems](https://developer.nvidia.com/nsight-systems)
 profiles into one queryable set of tables, and get a readable report out of them.
 
-**Status: skeleton.** The commands below exist but are not implemented yet. The
-agreed scope and contracts are in [docs/design.md](docs/design.md).
+**Status: early.** `build` is implemented but has only been tested on synthetic
+profiles so far. `report` and `ask` are not implemented yet. The agreed scope and
+contracts are in [docs/design.md](docs/design.md).
 
 nvstitch is an independent project built on `nsys` output. It is not affiliated
 with or endorsed by NVIDIA.

@@ -1,7 +1,7 @@
 """The nvstitch command line.
 
-The commands are declared here so the interface can be read in one place. None
-of them is implemented yet; each exits non-zero and says so. See docs/design.md.
+The commands are declared here so the interface can be read in one place. Those
+not implemented yet exit non-zero and say so. See docs/design.md.
 """
 
 from __future__ import annotations
@@ -10,6 +10,9 @@ import argparse
 import sys
 from importlib.metadata import version
 from pathlib import Path
+
+from nvstitch.build import build_facts
+from nvstitch.export import export_profiles
 
 
 def not_implemented(args: argparse.Namespace) -> None:
@@ -27,7 +30,9 @@ def parser() -> argparse.ArgumentParser:
                     help="profile collection to work on (default: current directory)")
     commands = ap.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("build", help="export profiles and build the fact tables")
+    build = commands.add_parser("build", help="export profiles and build the fact tables")
+    build.add_argument("-j", "--jobs", type=int, default=1, metavar="N",
+                       help="export up to N profiles at once (default: 1)")
 
     report = commands.add_parser("report", help="summarise a run")
     report.add_argument("run", nargs="?", help="run to report on (default: newest)")
@@ -43,4 +48,10 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = parser().parse_args()
-    not_implemented(args)
+    if args.command == "build":
+        if not args.collection.is_dir():
+            sys.exit(f"no collection at {args.collection}")
+        export_profiles(args.collection, args.jobs)
+        build_facts(args.collection)
+    else:
+        not_implemented(args)

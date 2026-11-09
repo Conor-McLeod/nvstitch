@@ -4,7 +4,9 @@ nvstitch grows out of the `analysis/` directory of par_gemmul8. That code works
 well for its author but assumes one cluster, one program and one workflow. The
 goal here is a tool someone else can pick up without learning all of that.
 
-Nothing below is implemented yet.
+`nvstitch build` is implemented, but has not yet run on real nsys output: its
+tests use synthetic databases holding only the columns `extract.sql` reads. The
+rest of this document is still to be built.
 
 ## Scope
 
@@ -36,6 +38,11 @@ or disagreeing ranks is much of why the numbers can be trusted.
   names are arbitrary, so they cannot be assumed to sort.
 - Derived data lives in the collection (`<collection>/facts/`, and `.sqlite` next
   to its `.nsys-rep`). This repository holds no data.
+- The fact tables identify a profile by `run`, `label` and `rank`.
+- nsys writes a table only when it has content, so a profile may lack MPI, NVTX or
+  activity tables. Those fact tables are then simply empty for that profile.
+- Which GPU metrics exist depends on the GPU. Some empty metric columns produce a
+  warning; all of them empty is an error, as it means the nsys names have changed.
 
 ## The optional runs table
 
@@ -116,9 +123,11 @@ so `report` can call it. `--job` is the only flag most of them need.
 
 ## Porting from par_gemmul8
 
-**Moves here:** `build.py`, `extract.sql`, the export step (replacing `make` and
-`export.sh`), the generic views from `setup.sql`, the `common.py` helpers, tier 1
-and 2 questions, and `plots/clock.py`.
+**Done:** `build.py`, `extract.sql` and the export step (replacing `make` and
+`export.sh`).
+
+**Still to move here:** the generic views from `setup.sql`, the `common.py`
+helpers, tier 1 and 2 questions, and `plots/clock.py`.
 
 **Stays in par_gemmul8/analysis:** `sync.sh`, `ingest.py` (which becomes the
 adapter writing `runs.csv`, adding the `run_` label prefix), the views `clean`,
@@ -127,7 +136,8 @@ adapter writing `runs.csv`, adding the `run_` label prefix), the views `clean`,
 
 **Known changes needed while porting:**
 
-- `build.py` requires `run_<method>_rank<n>` filenames; loosen that.
+- Ported views and questions must use `run` and `label`, where par_gemmul8 has
+  `job_id` and `method`.
 - `setup.sql` needs splitting, and must stop requiring `runs.csv` at load.
 - `north_star` depends on `clean`; make that optional.
 - The `OzakiGemmModFusion` parsing in the `kernels` view moves to par_gemmul8.
