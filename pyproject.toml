@@ -1,0 +1,22 @@
+[project]
+name = "nvstitch"
+version = "0.1.0"
+description = "Stitch per-rank nsys profiles into one queryable set of tables and reports"
+readme = "README.md"
+authors = [
+    { name = "Conor McLeod", email = "conor.mcleod03@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.5.5,<2",
+    "matplotlib>=3.11.2",
+    "pandas>=3.0.5",
+    "tabulate>=0.10.0",
+]
+
+[project.scripts]
+nvstitch = "nvstitch.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
