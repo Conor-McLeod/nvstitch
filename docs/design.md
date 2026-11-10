@@ -4,9 +4,8 @@ nvstitch grows out of the `analysis/` directory of par_gemmul8. That code works
 well for its author but assumes one cluster, one program and one workflow. The
 goal here is a tool someone else can pick up without learning all of that.
 
-`nvstitch build` is implemented, but has not yet run on real nsys output: its
-tests use synthetic databases holding only the columns `extract.sql` reads. The
-rest of this document is still to be built.
+`nvstitch build` is implemented and has been checked against real data (see
+[Verification](#verification)). The rest of this document is still to be built.
 
 ## Scope
 
@@ -121,6 +120,41 @@ so `report` can call it. `--job` is the only flag most of them need.
 - DuckDB is capped below 2 until the port is verified, to stay on the same 1.x
   line as par_gemmul8's `analysis/` (locked to 1.5.5).
 
+## Verification
+
+On 2026-11-09, `nvstitch build` and par_gemmul8's `analysis/build.py` were run on
+the same `.sqlite` exports of job 2160148: 12 profiles (three methods, four ranks)
+on GH200, with GPU metrics. All six fact tables matched, with the same rows (1.5M
+in `gpu_metrics`) and the same column names, order and types, once `job_id` and
+`method` are renamed to `run` and `label`. The only value that differs is the
+label, which keeps the filename's `run_` prefix (`run_par_ozaki`) where
+par_gemmul8 strips it.
+
+Not covered: the exports were made with nsys 2026.2.1 (export schema 3.25.0),
+while par_gemmul8's profiles were taken and previously exported with 2025.5.1; the
+two builds ran on DuckDB 1.5.6 and 1.5.5; and only the fact tables were compared,
+not views or questions.
+
+## Exporting on macOS
+
+The macOS Nsight Systems app ships the GUI (`nsys-ui`) but no native `nsys`
+command. Its `Contents/target-linux-x64/nsys` is a Linux x86-64 build, which runs
+in an x86-64 container (tested with OrbStack). `nsys` refuses to run unless its
+folder is named `target-linux-x64`, and the collection must be mounted at the same
+absolute path inside the container so that the paths nvstitch passes still
+resolve:
+
+```bash
+#!/bin/bash
+C=/absolute/path/to/collection
+exec docker run --rm --platform linux/amd64 \
+  -v "/Applications/NVIDIA Nsight Systems.app/Contents/target-linux-x64:/opt/target-linux-x64:ro" \
+  -v "$C:$C" ubuntu:24.04 /opt/target-linux-x64/nsys "$@"
+```
+
+Pointing `NSYS` at this script lets `nvstitch build` export as usual. Under
+emulation, 12 reports took about four minutes with `-j 3`.
+
 ## Porting from par_gemmul8
 
 **Done:** `build.py`, `extract.sql` and the export step (replacing `make` and
@@ -152,3 +186,5 @@ adapter writing `runs.csv`, adding the `run_` label prefix), the views `clean`,
   so inspect the sample before committing it.
 - `doctor`-style guidance when setup is incomplete.
 - A marimo app on top of the same `run()` functions, after `report` exists.
+- On macOS, the "nsys was not found" error should point to the container route
+  rather than telling the user to put `nsys` on `PATH`.
