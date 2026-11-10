@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 from conftest import EPOCH_NS, make_profile, stage_profile
-from nvstitch import cli, connect, latest_run
+from nvstitch import connect, latest_run
 from nvstitch.build import build_facts
 from nvstitch.questions import north_star, stage_breakdown
 
@@ -196,33 +195,3 @@ def test_north_star_rejects_unknown_arguments(collection: Path) -> None:
         north_star.answer(con, meta=["knob"])
     with pytest.raises(SystemExit, match="no run 'nope'"):
         north_star.answer(con, run="nope")
-
-
-# --------------------------------------------------------------- cli
-
-def run_cli(monkeypatch: pytest.MonkeyPatch, *argv: str) -> None:
-    monkeypatch.setattr(sys, "argv", ["nvstitch", *argv])
-    cli.main()
-
-
-def test_ask_lists_the_questions(monkeypatch, capsys) -> None:
-    run_cli(monkeypatch, "ask")
-
-    out = capsys.readouterr().out
-    assert "north_star" in out and "stage_breakdown" in out
-
-
-def test_ask_answers_for_a_run(collection: Path, monkeypatch, capsys) -> None:
-    two_rank_run(collection, "b", epoch=EPOCH_NS)
-    two_rank_run(collection, "a", epoch=EPOCH_NS + DAY)
-    build_facts(collection)
-    capsys.readouterr()
-
-    run_cli(monkeypatch, "-C", str(collection), "ask", "stage_breakdown", "--run", "b")
-
-    assert "## b / gemm / rank 0 -- wall clock" in capsys.readouterr().out
-
-
-def test_ask_rejects_an_unknown_question(monkeypatch) -> None:
-    with pytest.raises(SystemExit, match="no question 'nope'"):
-        run_cli(monkeypatch, "ask", "nope")

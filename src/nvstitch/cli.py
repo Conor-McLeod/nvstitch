@@ -4,74 +4,102 @@ The commands are declared here so the interface can be read in one place. Those
 not implemented yet exit non-zero and say so. See docs/design.md.
 """
 
-from __future__ import annotations
-
-import argparse
 import sys
 from importlib.metadata import version
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 from nvstitch.build import build_facts
 from nvstitch.export import export_profiles
 from nvstitch.query import connect, show
 from nvstitch.questions import available, summary
 
+app = typer.Typer(
+    help="Stitch per-rank nsys profiles into queryable tables and reports.",
+    no_args_is_help=True,
+    # A traceback's locals can hold profile data; the frames are enough.
+    pretty_exceptions_show_locals=False,
+)
 
-def not_implemented(args: argparse.Namespace) -> None:
-    sys.exit(f"nvstitch {args.command}: not implemented yet")
+
+def show_version(value: bool) -> None:
+    if value:
+        print(f"nvstitch {version('nvstitch')}")
+        raise typer.Exit()
 
 
-def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(
-        prog="nvstitch",
-        description="Stitch per-rank nsys profiles into queryable tables and reports.")
-    ap.add_argument("--version", action="version",
-                    version=f"%(prog)s {version('nvstitch')}")
-    ap.add_argument("-C", "--collection", type=Path, default=Path("."),
-                    metavar="DIR",
-                    help="profile collection to work on (default: current directory)")
-    commands = ap.add_subparsers(dest="command", required=True)
+def question_names(incomplete: str) -> list[str]:
+    return [name for name in available() if name.startswith(incomplete)]
 
-    build = commands.add_parser("build", help="export profiles and build the fact tables")
-    build.add_argument("-j", "--jobs", type=int, default=1, metavar="N",
-                       help="export up to N profiles at once (default: 1)")
 
-    report = commands.add_parser("report", help="summarise a run")
-    report.add_argument("run", nargs="?", help="run to report on (default: newest)")
-    report.add_argument("--vs", metavar="RUN",
-                        help="run to compare against (default: the one before)")
+@app.callback()
+def options(
+    ctx: typer.Context,
+    collection: Annotated[Path, typer.Option(
+        "-C", "--collection", metavar="DIR",
+        help="Profile collection to work on.")] = Path("."),
+    _version: Annotated[bool, typer.Option(
+        "--version", callback=show_version, is_eager=True,
+        help="Show the version and exit.")] = False,
+) -> None:
+    ctx.obj = collection
 
-    ask = commands.add_parser("ask", help="list the questions, or answer one")
-    ask.add_argument("question", nargs="?", help="question to answer (default: list them)")
-    ask.add_argument("--run", metavar="RUN", help="run to ask about (default: newest)")
-    ask.add_argument("--md", action="store_true", help="print markdown tables")
 
-    return ap
+@app.command()
+def build(
+    ctx: typer.Context,
+    jobs: Annotated[int, typer.Option(
+        "-j", "--jobs", metavar="N", min=1,
+        help="Export up to N profiles at once.")] = 1,
+) -> None:
+    """Export profiles and build the fact tables."""
+    collection: Path = ctx.obj
+    if not collection.is_dir():
+        sys.exit(f"no collection at {collection}")
+    export_profiles(collection, jobs)
+    build_facts(collection)
+
+
+@app.command()
+def report(
+    run: Annotated[str | None, typer.Argument(
+        help="Run to report on. Default: the newest.")] = None,
+    vs: Annotated[str | None, typer.Option(
+        "--vs", metavar="RUN",
+        help="Run to compare against. Default: the one before.")] = None,
+) -> None:
+    """Summarise a run."""
+    sys.exit("nvstitch report: not implemented yet")
+
+
+@app.command()
+def ask(
+    ctx: typer.Context,
+    question: Annotated[str | None, typer.Argument(
+        metavar="QUESTION", help="Question to answer. Default: list them.",
+        autocompletion=question_names)] = None,
+    run: Annotated[str | None, typer.Option(
+        "--run", metavar="RUN", help="Run to ask about. Default: the newest.")] = None,
+    md: Annotated[bool, typer.Option(
+        "--md", help="Print markdown tables.")] = False,
+) -> None:
+    """List the questions, or answer one."""
+    questions = available()
+    if question is None:
+        width = max(map(len, questions))
+        for name, module in questions.items():
+            print(f"{name:<{width}}  {summary(module)}")
+        return
+    if question not in questions:
+        raise typer.BadParameter(f"no question {question!r}; `nvstitch ask` lists them",
+                                 param_hint="QUESTION")
+    con = connect(ctx.obj)
+    kwargs = {} if run is None else {"run": run}
+    for table in questions[question].answer(con, **kwargs):
+        show(table, markdown=md or None)
 
 
 def main() -> None:
-    args = parser().parse_args()
-    if args.command == "build":
-        if not args.collection.is_dir():
-            sys.exit(f"no collection at {args.collection}")
-        export_profiles(args.collection, args.jobs)
-        build_facts(args.collection)
-    elif args.command == "ask":
-        ask(args)
-    else:
-        not_implemented(args)
-
-
-def ask(args: argparse.Namespace) -> None:
-    questions = available()
-    if args.question is None:
-        width = max(map(len, questions))
-        for name, question in questions.items():
-            print(f"{name:<{width}}  {summary(question)}")
-        return
-    if args.question not in questions:
-        sys.exit(f"no question {args.question!r}; `nvstitch ask` lists them")
-    con = connect(args.collection)
-    kwargs = {} if args.run is None else {"run": args.run}
-    for table in questions[args.question].answer(con, **kwargs):
-        show(table, markdown=args.md or None)
+    app()
