@@ -4,8 +4,10 @@ nvstitch grows out of the `analysis/` directory of par_gemmul8. That code works
 well for its author but assumes one cluster, one program and one workflow. The
 goal here is a tool someone else can pick up without learning all of that.
 
-`nvstitch build` is implemented and has been checked against real data (see
-[Verification](#verification)). The rest of this document is still to be built.
+Implemented and checked against real data (see [Verification](#verification)):
+`nvstitch build`, the views, and two questions, `stage_breakdown` and `north_star`,
+through `nvstitch ask`. `report` and the remaining questions are still to be
+built.
 
 ## Scope
 
@@ -97,7 +99,7 @@ Check each script when porting it.
 ```
 nvstitch [-C DIR] build
 nvstitch [-C DIR] report [RUN] [--vs RUN]
-nvstitch [-C DIR] ask [QUESTION] [--job RUN]
+nvstitch [-C DIR] ask [QUESTION] [--run RUN] [--md]
 ```
 
 `-C` selects the collection and defaults to the current directory.
@@ -105,15 +107,18 @@ nvstitch [-C DIR] ask [QUESTION] [--job RUN]
 Questions stay as one file each, with their parameters as literals at the top.
 Earlier argparse subcommands in par_gemmul8 were dropped because flags carry only
 scalars, while a question may want a list of ranks or two jobs to compare. Each
-question gets a `run(con, job=JOB, ...)` function with those literals as defaults,
-so `report` can call it. `--job` is the only flag most of them need.
+question has an `answer(con, ...)` function that takes those literals as keyword
+defaults and returns a list of `Table`s (caption, frame and column formats), so
+`ask`, `report` and Python callers all share it. `ask` passes only `--run`; for
+any other argument, call `answer()` from Python.
 
 ## Packaging
 
 - SQL files ship inside the package and load through `importlib.resources`.
 - Install from a git URL for now; PyPI can wait.
-- The public Python API is `connect`, `filters`, `in_reps` and `show`. Application
-  repositories build on these, so they need to stay stable.
+- The public Python API is `connect`, `latest_run`, `filters`, `in_reps`, `show`
+  and `Table`, plus each question's `answer()`. Application repositories build on
+  these, so they need to stay stable.
 - `connect()` takes a collection path and can load extra SQL, so an application
   can layer its own views on top.
 - A `questions_dir` setting lets `ask` find application-specific questions.
@@ -132,8 +137,17 @@ par_gemmul8 strips it.
 
 Not covered: the exports were made with nsys 2026.2.1 (export schema 3.25.0),
 while par_gemmul8's profiles were taken and previously exported with 2025.5.1; the
-two builds ran on DuckDB 1.5.6 and 1.5.5; and only the fact tables were compared,
-not views or questions.
+two builds ran on DuckDB 1.5.6 and 1.5.5.
+
+On 2026-11-10 the same comparison was made for the questions, running
+par_gemmul8's own question scripts unmodified apart from their literals. Every
+table matched exactly after the same renames: `stage_breakdown` (with
+`CALL="%gemm"`) for both staged methods, all four ranks, with and without the
+warmup, and `north_star` (with `META=["peer_copy"]`). Since job 2160148 alone gives
+`north_star` no previous run, it was also compared on that job plus a synthetic
+successor, a copy a day later with every stage range 10% longer and `peer_copy`
+flipped, built identically into both sides' tables. Both reported the same 10%
+deltas.
 
 ## Exporting on macOS
 
@@ -157,27 +171,33 @@ emulation, 12 reports took about four minutes with `-j 3`.
 
 ## Porting from par_gemmul8
 
-**Done:** `build.py`, `extract.sql` and the export step (replacing `make` and
-`export.sh`).
+**Done:** `build.py`, `extract.sql`, the export step (replacing `make` and
+`export.sh`), the generic views from `setup.sql`, the `common.py` helpers, and the
+questions `stage_breakdown` and `north_star`.
 
-**Still to move here:** the generic views from `setup.sql`, the `common.py`
-helpers, tier 1 and 2 questions, and `plots/clock.py`.
+**Still to move here:** the other tier 1 and 2 questions, and `plots/clock.py`.
 
 **Stays in par_gemmul8/analysis:** `sync.sh`, `ingest.py` (which becomes the
 adapter writing `runs.csv`, adding the `run_` label prefix), the views `clean`,
-`reported_stages`, `timeline`, `profiler_overhead` and `gemm_calls`,
+`reported_stages`, `timeline`, `profiler_overhead`, `gemm_calls` and `stage_wall`,
 `fused_tune.py`, `timing_vs_nvtx`, `stage3_*` and `sweeps.py`.
 
 **Known changes needed while porting:**
 
 - Ported views and questions must use `run` and `label`, where par_gemmul8 has
   `job_id` and `method`.
-- `setup.sql` needs splitting, and must stop requiring `runs.csv` at load.
-- `north_star` depends on `clean`; make that optional.
 - The `OzakiGemmModFusion` parsing in the `kernels` view moves to par_gemmul8.
 
-**Do not retire `analysis/`** until nvstitch reproduces its `north_star` and
-`stage_breakdown` output on the same profiles.
+**What par_gemmul8 needs to switch over:** `ingest.py` writing the runs table; its
+own SQL passed to `connect(extra_sql=...)`, holding the views listed above and the
+`mod_idx` column on `kernels`; and its settings for the generic questions:
+`stage_breakdown` with `CALL="%gemm"`, and `north_star` with
+`EXCLUDE=["1703852"]` and `META=["peer_copy"]`.
+
+**Retiring `analysis/`:** the agreed bar, nvstitch reproducing its `north_star`
+and `stage_breakdown` output on the same profiles, is met (see Verification). It
+still holds questions nvstitch doesn't have yet, so keep it until those are
+ported or moved into par_gemmul8's own question set.
 
 ## Open items
 

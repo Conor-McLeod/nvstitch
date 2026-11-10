@@ -13,6 +13,8 @@ from pathlib import Path
 
 from nvstitch.build import build_facts
 from nvstitch.export import export_profiles
+from nvstitch.query import connect, show
+from nvstitch.questions import available, summary
 
 
 def not_implemented(args: argparse.Namespace) -> None:
@@ -39,9 +41,10 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument("--vs", metavar="RUN",
                         help="run to compare against (default: the one before)")
 
-    ask = commands.add_parser("ask", help="list the questions, or run one")
-    ask.add_argument("question", nargs="?", help="question to run (default: list them)")
-    ask.add_argument("--job", metavar="RUN", help="run to ask about (default: newest)")
+    ask = commands.add_parser("ask", help="list the questions, or answer one")
+    ask.add_argument("question", nargs="?", help="question to answer (default: list them)")
+    ask.add_argument("--run", metavar="RUN", help="run to ask about (default: newest)")
+    ask.add_argument("--md", action="store_true", help="print markdown tables")
 
     return ap
 
@@ -53,5 +56,22 @@ def main() -> None:
             sys.exit(f"no collection at {args.collection}")
         export_profiles(args.collection, args.jobs)
         build_facts(args.collection)
+    elif args.command == "ask":
+        ask(args)
     else:
         not_implemented(args)
+
+
+def ask(args: argparse.Namespace) -> None:
+    questions = available()
+    if args.question is None:
+        width = max(map(len, questions))
+        for name, question in questions.items():
+            print(f"{name:<{width}}  {summary(question)}")
+        return
+    if args.question not in questions:
+        sys.exit(f"no question {args.question!r}; `nvstitch ask` lists them")
+    con = connect(args.collection)
+    kwargs = {} if args.run is None else {"run": args.run}
+    for table in questions[args.question].answer(con, **kwargs):
+        show(table, markdown=args.md or None)

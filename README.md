@@ -3,9 +3,9 @@
 Stitch per-rank [Nsight Systems](https://developer.nvidia.com/nsight-systems)
 profiles into one queryable set of tables, and get a readable report out of them.
 
-**Status: early.** `build` is implemented, and on a real 12-profile job it produced
-exactly the same tables as the par_gemmul8 code it replaces. `report` and `ask` are
-not implemented yet. The agreed scope and
+**Status: early.** `build` and `ask` work, with two questions so far, and on a
+real 12-profile job they give exactly the same answers as the par_gemmul8 code they
+replace. `report` is not implemented yet. The agreed scope and
 contracts are in [docs/design.md](docs/design.md).
 
 nvstitch is an independent project built on `nsys` output. It is not affiliated
@@ -27,11 +27,11 @@ nvstitch -C <collection> build
 ```
 
 ```bash
-nvstitch -C <collection> report
+nvstitch -C <collection> ask
 ```
 
 ```bash
-nvstitch -C <collection> ask
+nvstitch -C <collection> ask stage_breakdown --run <run>
 ```
 
 Getting the profiles into that folder, and running the jobs that produce them,
